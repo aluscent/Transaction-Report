@@ -26,6 +26,6 @@ object SparkApiReport extends Report {
 
     val guarantees = PivotTransactionType(reportDate, guarantorsAdded)
 
-    postgresConnector.writeTable(guarantees, """"public"."guarantees"""")
+    postgresConnector.replaceReport(guarantees, """"public"."guarantees"""", reportDate)
   }
 }

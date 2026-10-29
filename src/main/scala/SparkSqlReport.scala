@@ -15,27 +15,17 @@ object SparkSqlReport extends Report {
   def main(args: Array[String]): Unit = {
     val reportDate: String = GetDate(args)
 
-    PostgresTransactionRepository(postgresConnector, reportDate)
-      .filteredTable.createOrReplaceTempView("transactions")
-
-    broadcast(
-      PostgresReceiversRegistryRepository(postgresConnector, reportDate)
-        .filteredTable.cache()
-    )
-      .createOrReplaceTempView("receivers_registry")
-
-    broadcast(
-      PostgresExchangeRateRepository(postgresConnector, reportDate)
-        .filteredTable.cache()
-    )
-      .createOrReplaceTempView("exchange_rates")
+    import sparkSession.implicits._
+    val transactions = PostgresTransactionRepository(postgresConnector, reportDate).filteredTable
+    val valid = business.CheckRegisteredReceivers(transactions, postgresConnector, reportDate)
+    val euros = business.EuroExchangeRates(valid, postgresConnector, reportDate)
+    business.ParseGuarantors(euros).createOrReplaceTempView("allocated_transactions")
 
     println(SQLs.sqlReport(reportDate))
 
-    import sparkSession.implicits._
     val guarantees: Dataset[Guarantee] =
       sparkSession.sql(SQLs.sqlReport(reportDate)).as[Guarantee]
 
-    postgresConnector.writeTable(guarantees, """"public"."guarantees"""")
+    postgresConnector.replaceReport(guarantees, """"public"."guarantees"""", reportDate)
   }
 }

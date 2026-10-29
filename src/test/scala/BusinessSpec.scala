@@ -18,11 +18,7 @@ class BusinessSpec extends AnyFlatSpec with Report with BeforeAndAfterAll {
   override def beforeAll(): Unit = {
     sparkSession
 
-    val field = System.getenv().getClass.getDeclaredField("m")
-    field.setAccessible(true)
-    val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
-    map.put("POSTGRES_USER", "postgres")
-    map.put("POSTGRES_PASSWORD", "docker")
+
   }
 
   override def afterAll(): Unit = {
@@ -104,7 +100,7 @@ class BusinessSpec extends AnyFlatSpec with Report with BeforeAndAfterAll {
       (results.last.amount.toDouble / 100) == 0.3))
   }
 
-  "For invalid guarantors" should "exclude transactions" in {
+  "For invalid guarantors" should "fail the batch" in {
     import sparkSession.implicits._
 
     // Test data - invalid JSON structure
@@ -118,7 +114,7 @@ class BusinessSpec extends AnyFlatSpec with Report with BeforeAndAfterAll {
 
     val resultDS = ParseGuarantors(inputDS)
 
-    assert(resultDS.count() == 0)
+    intercept[Exception] { resultDS.collect() }
   }
 
   // CheckRegisteredReceivers tests

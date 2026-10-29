@@ -16,12 +16,7 @@ class DataSpec extends AnyFlatSpec with Report with BeforeAndAfterAll {
   val date: String = "2025-02-25"
 
   override def beforeAll(): Unit = {
-    val field = System.getenv().getClass.getDeclaredField("m")
-    field.setAccessible(true)
-    val map = field.get(System.getenv())
-      .asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
-    map.put("POSTGRES_USER", "postgres")
-    map.put("POSTGRES_PASSWORD", "docker")
+
 
     sparkSession
   }

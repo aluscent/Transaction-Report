@@ -19,7 +19,7 @@ case class Transaction(
     partition_date: String
 ) extends TableRow {
 
-  def convertToTransitoryRow(guarantorName: String, guarantorPercentage: Double): TransitoryRow =
+  def convertToTransitoryRow(guarantorName: String, guarantorPercentage: BigDecimal): TransitoryRow =
     TransitoryRow(
       country,
       currency,
