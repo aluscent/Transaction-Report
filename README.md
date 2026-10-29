@@ -1,123 +1,74 @@
-# Transaction Guarantee Reporting System 💰
+# Transaction Guarantee Reporting
 
-A Spark-based solution for processing financial transactions with guarantor information, generating aggregated reports per country/guarantor. Built for scalability and compliance with financial data standards.
+A Scala/Spark project that converts eligible transactions to EUR, allocates
+amounts to guarantors and reports totals/averages by country and transaction class.
+The Dataset API and SQL paths share the business rules and use different aggregations.
 
-[![Scala](https://img.shields.io/badge/Scala-2.13-red)](https://www.scala-lang.org/)
-[![Spark](https://img.shields.io/badge/Spark-3.5-blue)](https://spark.apache.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13-green)](https://www.postgresql.org/)
+## Run and verify
 
-## 🌟 Features
-- Transaction processing with guarantor allocation
-- Currency conversion to EUR using latest rates
-- Receiver validation through registry checks
-- Daily partitioned reporting
-- Dual implementation (DataFrame API & Spark SQL)
-- Integration with PostgreSQL
-- Unit & integration testing suite
+Use JDK 17 and sbt. Run the local Spark suite without a database:
 
-## 📚 Index
-1. [Project Structure](#-project-structure)
-2. [Core Modules](#-core-modules)
-   - [Data Models](#data-models)
-   - [Business Logic](#business-logic)
-   - [PostgreSQL Connectivity](#postgresql-connectivity)
-   - [Reporting Engine](#reporting-engine)
-3. [Getting Started](#-getting-started)
-4. [Test Strategy](#-test-strategy)
-5. [Performance Notes](#-performance-notes)
-
-## 🏗️ Project Structure
-
-### Core Modules
-
-#### **Data Models** (`data/Rows.scala`)
-```scala
-case class Transaction(...)          // Core transaction entity
-case class Guarantee(...)            // Final report format
-case class TransitoryRow(...)        // Intermediate processing format
-object Rows                          // Schema definitions
+```sh
+sbt 'testOnly com.alitariverdy.FinancialRulesSpec com.alitariverdy.BusinessSpec com.alitariverdy.DataSpec'
 ```
 
-#### **Business Logic**
-| Module               | Purpose                          |
-|----------------------|----------------------------------|
-| `ParseGuarantors`    | JSON ➔ Guarantor list expansion  |
-| `PivotTransactionType` | Transaction class aggregation  |
-| `CheckRegisteredReceivers` | Receiver validation         |
-| `EuroExchangeRates`  | Currency conversion              |
+For the synthetic end-to-end example, start the checked-in PostgreSQL fixture:
 
-#### **PostgreSQL Connectivity** (`db/PostgresConnector.scala`)
-```scala
-class PostgresConnector            // Read/write JDBC operations
-object PostgresConnector           // Factory methods
+```sh
+docker compose -f src/test/resources/docker-compose.yml up -d
+export POSTGRES_USER=postgres
+export POSTGRES_PASSWORD=docker
+sbt 'runMain com.alitariverdy.SparkApiReport 2025-02-25'
+# Same date through the SQL aggregation (replaces that date):
+sbt 'runMain com.alitariverdy.SparkSqlReport 2025-02-25'
 ```
 
-#### **Reporting Engine** (`Report.scala`, `SparkSqlReport.scala`)
-```scala
-object Report          // Parent type of reports
-object SparkApiReport  // DataFrame API implementation
-object SparkSqlReport  // Pure SQL implementation
-```
+The fixture contains synthetic transactions, a receiver registry and exchange
+rates. Configure the JDBC URL in `src/main/resources/application.conf` when using
+a different database. JDK module options in `build.sbt` apply to tests; use a
+Spark distribution's launcher for standalone production jobs.
 
-### Support Modules
-```scala
-object Tables              // Dataset initialization
-object JsonGuarantorParser // JSON parsing logic
-```
+## Example evidence
 
-## 🚀 Getting Started
+For an eligible USD 10.01 transaction with rate 0.8 and shares 0.1/0.9, the
+allocated EUR amounts are 0.8008 and 7.2072. `FinancialRulesSpec` asserts those
+amounts independently and compares both aggregation results. This intentionally
+shows precision before a business-specific rounding policy is introduced.
 
-### Prerequisites
-- Scala 2.13
-- Spark 3.5
-- PostgreSQL 13+
-- Docker (for integration tests)
+## Structure
 
-### Setup
-1. Start PostgreSQL:
-```bash
-docker-compose up -d
-```
+- `data/rows`: typed inputs, allocations and report rows.
+- `data/*Repository`: dated source selection.
+- `business`: eligibility, reference validation, conversion and allocation.
+- `db/SQLs.scala`: SQL aggregation over shared allocated transactions.
+- `db/PostgresConnector.scala`: JDBC reads and staged report publication.
 
-2. Run Spark job:
-```bash
-spark-submit --class com.alitariverdy.SparkApiReport \
-  --master local[*] \
-  target/scala-2.13/transaction-reporting_2.13-1.0.jar
-```
+## Financial rules and reproducible evidence
 
-## 🔍 Test Strategy
+Run `sbt 'testOnly com.alitariverdy.FinancialRulesSpec'` on JDK 17. This local
+Spark suite needs no PostgreSQL or Docker. It checks independent expected decimal
+amounts, SQL/Dataset parity, missing rates, duplicate rates, and invalid shares.
 
-### Unit Tests
-```scala
-class DataSpec     // Data repositories tests
-class BusinessSpec // Business conversions tests
-```
+Both entrypoints now share eligibility, EUR conversion and decimal allocation;
+their aggregation implementations remain separate. Rates use the latest global
+batch on or before the report date, not a different date per currency. Each
+transaction currency requires one positive EUR rate, including EUR itself when
+present. Incomplete or duplicate batches fail before the join instead of dropping
+transactions or choosing an arbitrary duplicate. Output currency is EUR.
 
-### Integration Tests
-```scala
-class ReportSpec // Full pipeline test
-```
+Shares are decimal fractions in [0,1], with non-empty unique guarantor names and
+sum at most 1 (partial guarantees are allowed). Invalid JSON fails the batch.
+There is no additional rounding before aggregation; Spark decimal precision and
+scale still apply. Production use requires an agreed currency rounding policy.
 
-Run tests:
-```bash
-sbt test
-```
+Report entrypoints stage Spark output in PostgreSQL, then atomically replace the
+requested date in a transaction. Reruns replace that date; other dates remain.
+An insert failure rolls back the delete. Publishing takes a table lock to serialize
+writers and requires CREATE/DROP permissions in the target schema. A killed process
+can leave an orphan staging table for cleanup; it cannot expose that stage as the
+published report. The low-level `writeTable` method still explicitly appends.
 
-## ⚡ Performance Notes
-- **Broadcast Join**: Used for small datasets (exchange rates, receivers)
-- **Caching**: Critical tables cached in memory
-- **Partitioning**: Daily partitioning for all datasets
-- **Predicate Pushdown**: Optimized SQL queries
-
-## 🧠 Design Philosophy
-```mermaid
-graph TD
-    A[PostgreSQL] --> B{Spark}
-    B --> C[Data Validation]
-    B --> D[Currency Conversion]
-    B --> E[Guarantor Parsing]
-    B --> F[Aggregation]
-    F --> G[PostgreSQL]
-```
-
+`ReportPublishSpec` uses a real PostgreSQL container to test replacement, preservation
+of other dates, rollback on a constraint failure, and clearing an empty report date.
+Run it with Docker using `sbt 'testOnly com.alitariverdy.ReportPublishSpec'`.
+This is a portfolio implementation, not a claim of regulatory certification.

@@ -29,7 +29,6 @@ class PostgresExchangeRateRepository(val postgresConnector: PostgresConnector, r
 
   override lazy val filteredTable: Dataset[ExchangeRate] = table
     .filter(t => t.to_currency == "EUR" && t.partition_date == latestExchangeRatesDate.value)
-    .dropDuplicates(List("from_currency"))
 }
 
 object PostgresExchangeRateRepository {

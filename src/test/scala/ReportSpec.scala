@@ -17,12 +17,7 @@ class ReportSpec extends AnyFlatSpec with Report with BeforeAndAfterEach with Be
   var container: DockerComposeContainer = _
 
   override def beforeAll(): Unit = {
-    val field = System.getenv().getClass.getDeclaredField("m")
-    field.setAccessible(true)
-    val map = field.get(System.getenv())
-      .asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
-    map.put("POSTGRES_USER", "postgres")
-    map.put("POSTGRES_PASSWORD", "docker")
+
 
     sparkSession
   }
@@ -60,7 +55,7 @@ class ReportSpec extends AnyFlatSpec with Report with BeforeAndAfterEach with Be
     import sparkSession.implicits._
 
     // Execute the report
-    report.main(Array.empty)
+    report.main(Array("2025-02-25"))
 
     // Schema to StructType conversion
     val schema = ScalaReflection
