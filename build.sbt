@@ -31,8 +31,8 @@ lazy val root = (project in file("."))
 
       "org.postgresql" % "postgresql" % "42.7.3",
 
-      "com.dimafeng" %% "testcontainers-scala-postgresql" % "0.41.3" % Test,
-      "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.41.3" % Test,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % "0.44.1" % Test,
+      "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.44.1" % Test,
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.jmockit" % "jmockit" % "1.49" % Test
     )
